@@ -28,7 +28,7 @@ class Blur:
 
             roi = output[y:y+h, x:x+w]
 
-            if roi.size == 0:
+            if roi.size == 0:  #.size means total number of elements w*h*colorchannels
                 continue
 
             # Gaussian Blur
