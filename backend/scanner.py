@@ -33,7 +33,6 @@ def scan_document(img):
     if img is None:
         raise ValueError("Input image is None.")
 
-    original = img.copy()
 
     # ==========================================================
     # STEP 2 : RESIZE IMAGE
@@ -51,7 +50,6 @@ def scan_document(img):
 
     # Keep a copy after resizing
     original = img.copy()
-    display = img.copy()
 
     # ==========================================================
     # STEP 3 : APPLY GAUSSIAN BLUR
@@ -154,19 +152,7 @@ def scan_document(img):
         return original
 
     # ==========================================================
-    # STEP 10 : DRAW DOCUMENT BOUNDARY
-    # ==========================================================
-
-    cv2.drawContours(
-        display,
-        [doc],
-        -1,
-        (0, 255, 0),
-        3
-    )
-
-    # ==========================================================
-    # STEP 11 : EXTRACT THE FOUR CORNER POINTS
+    # STEP 10 : EXTRACT THE FOUR CORNER POINTS
     # ==========================================================
 
     # Convert contour into four corner points
@@ -174,7 +160,7 @@ def scan_document(img):
     pts = doc.reshape(4, 2)
 
     # ==========================================================
-    # STEP 12 : ARRANGE THE CORNER POINTS
+    # STEP 11 : ARRANGE THE CORNER POINTS
     # Order:
     # Top Left
     # Top Right
@@ -197,7 +183,7 @@ def scan_document(img):
     rect[3] = pts[np.argmax(diff)]   # Bottom Left
 
     # ==========================================================
-    # STEP 13 : CALCULATE WIDTH OF DOCUMENT
+    # STEP 12 : CALCULATE WIDTH OF DOCUMENT
     # ==========================================================
 
     (tl, tr, br, bl) = rect
@@ -208,7 +194,7 @@ def scan_document(img):
     maxWidth = max(int(widthA), int(widthB))
 
     # ==========================================================
-    # STEP 14 : CALCULATE HEIGHT OF DOCUMENT
+    # STEP 13 : CALCULATE HEIGHT OF DOCUMENT
     # ==========================================================
 
     heightA = np.linalg.norm(tr - br)
@@ -217,7 +203,7 @@ def scan_document(img):
     maxHeight = max(int(heightA), int(heightB))
 
     # ==========================================================
-    # STEP 15 : DEFINE DESTINATION POINTS
+    # STEP 14 : DEFINE DESTINATION POINTS
     # ==========================================================
 
     dst = np.array([
@@ -228,13 +214,13 @@ def scan_document(img):
     ], dtype="float32")
 
     # ==========================================================
-    # STEP 16 : COMPUTE PERSPECTIVE TRANSFORMATION MATRIX
+    # STEP 15 : COMPUTE PERSPECTIVE TRANSFORMATION MATRIX
     # ==========================================================
 
     matrix = cv2.getPerspectiveTransform(rect, dst)
 
     # ==========================================================
-    # STEP 17 : Perspective Transform
+    # STEP 16 : Perspective Transform
     # ==========================================================
 
     scanned = cv2.warpPerspective(
@@ -245,7 +231,7 @@ def scan_document(img):
 
 
     # ==========================================================
-    # STEP 18 : RETURN RESULTS
+    # STEP 17 : RETURN RESULTS
     # ==========================================================
 
     return scanned
