@@ -66,15 +66,15 @@ if uploaded_file is not None:
 
     with st.spinner("Processing document..."):
 
-        if use_scanner:
-            processed = scan_document(image_cv)
-        else:
-            processed = image_cv
+     if use_scanner:
+        processed = scan_document(image_cv)
+     else:
+        processed = image_cv.copy()
 
-        redacted, detected, faces, signatures = redact_document(
-            processed,
-            blur_strength=blur_strength
-        )
+     redacted, detected, faces, signatures = redact_document(
+        processed,
+        blur_strength=blur_strength
+    )
 
     processing_time = round(time.time() - start_time, 2)
 

@@ -1,11 +1,6 @@
 # ==========================================================
 # Intelligent Document Scanner & Alignment Tool
-# scanner.py
 # ==========================================================
-
-# --------------------------
-# Import Required Libraries
-# --------------------------
 
 import cv2
 import numpy as np
@@ -14,50 +9,79 @@ from .filters import gaussian_blur
 from .filters import sobel_edge_detection
 
 
-def scan_document(img):
+# ==========================================================
+# Helper Function
+# Arrange Corner Points
+# ==========================================================
+
+def order_points(points):
     """
-    Scan and align a document image.
-
-    Parameters:
-        img (numpy.ndarray): Input image in OpenCV (BGR) format.
-
-    Returns:
-        numpy.ndarray: Perspective corrected scanned image.
+    Arrange the detected corner points in the order:
+    Top Left, Top Right, Bottom Right, Bottom Left.
     """
 
-    # ==========================================================
-    # STEP 1 : VALIDATE INPUT IMAGE
-    # ==========================================================
+    rect = np.zeros((4, 2), dtype="float32")
 
-    if img is None:
+    s = points.sum(axis=1)
+    rect[0] = points[np.argmin(s)]
+    rect[2] = points[np.argmax(s)]
+
+    diff = np.diff(points, axis=1)
+    rect[1] = points[np.argmin(diff)]
+    rect[3] = points[np.argmax(diff)]
+
+    return rect
+
+
+# ==========================================================
+# Main Document Scanner
+# ==========================================================
+
+def scan_document(image):
+    """
+    Detects the document boundary and performs
+    perspective correction on camera-captured images.
+    """
+
+    # ======================================================
+    # Step 1 : Validate Input
+    # ======================================================
+
+    if image is None:
         raise ValueError("Input image is None.")
 
-    # ==========================================================
-    # STEP 2 : RESIZE IMAGE
-    # ==========================================================
+    original = image.copy()
 
-    height = 700
+    # ======================================================
+    # Step 2 : Resize Image
+    # ======================================================
 
-    ratio = img.shape[0] / height
-    width = int(img.shape[1] / ratio)
+    target_height = 700
 
-    img = cv2.resize(img, (width, height))
+    ratio = image.shape[0] / target_height
 
-    # ==========================================================
-    # STEP 3 : APPLY GAUSSIAN BLUR
-    # ==========================================================
+    target_width = int(image.shape[1] / ratio)
 
-    blur = gaussian_blur(img)
+    image = cv2.resize(
+        image,
+        (target_width, target_height)
+    )
 
-    # ==========================================================
-    # STEP 4 : APPLY SOBEL EDGE DETECTION
-    # ==========================================================
+    # ======================================================
+    # Step 3 : Apply Gaussian Blur
+    # ======================================================
 
-    edges = sobel_edge_detection(blur)
+    blurred = gaussian_blur(image)
 
-    # ==========================================================
-    # STEP 5 : APPLY THRESHOLDING
-    # ==========================================================
+    # ======================================================
+    # Step 4 : Detect Edges using Sobel Operator
+    # ======================================================
+
+    edges = sobel_edge_detection(blurred)
+
+    # ======================================================
+    # Step 5 : Convert Edge Image to Binary
+    # ======================================================
 
     _, thresh = cv2.threshold(
         edges,
@@ -66,9 +90,9 @@ def scan_document(img):
         cv2.THRESH_BINARY
     )
 
-    # ==========================================================
-    # STEP 6 : MORPHOLOGICAL CLOSING
-    # ==========================================================
+    # ======================================================
+    # Step 6 : Perform Morphological Closing
+    # ======================================================
 
     kernel = np.ones((5, 5), np.uint8)
 
@@ -78,19 +102,15 @@ def scan_document(img):
         kernel
     )
 
-    # ==========================================================
-    # STEP 7 : FIND EXTERNAL CONTOURS
-    # ==========================================================
+    # ======================================================
+    # Step 7 : Find External Contours
+    # ======================================================
 
-    contours, hierarchy = cv2.findContours(
+    contours, _ = cv2.findContours(
         thresh,
         cv2.RETR_EXTERNAL,
         cv2.CHAIN_APPROX_SIMPLE
     )
-
-    # ==========================================================
-    # STEP 8 : SORT CONTOURS
-    # ==========================================================
 
     contours = sorted(
         contours,
@@ -98,114 +118,94 @@ def scan_document(img):
         reverse=True
     )
 
-    # ==========================================================
-    # STEP 9 : FIND DOCUMENT CONTOUR
-    # ==========================================================
+    document = None
 
-    doc = None
+    # ======================================================
+    # Step 8 : Detect Document Boundary
+    # ======================================================
 
-    for cnt in contours:
+    for contour in contours:
 
-        area = cv2.contourArea(cnt)
-
-        if area < 10000:
-            continue
-
-        peri = cv2.arcLength(cnt, True)
+        perimeter = cv2.arcLength(
+            contour,
+            True
+        )
 
         approx = cv2.approxPolyDP(
-            cnt,
-            0.02 * peri,
+            contour,
+            0.02 * perimeter,
             True
         )
 
         if len(approx) == 4:
-            doc = approx
+            document = approx
             break
 
-    # ==========================================================
-    # DOCUMENT NOT FOUND
-    # ==========================================================
+    # ======================================================
+    # Step 9 : Return Original Image if No Document Found
+    # ======================================================
 
-    if doc is None:
-        return img
+    if document is None:
+        return original
 
-    # ==========================================================
-    # STEP 10 : EXTRACT FOUR CORNER POINTS
-    # ==========================================================
+    # ======================================================
+    # Step 10 : Arrange Corner Points
+    # ======================================================
 
-    pts = doc.reshape(4, 2)
-
-    # ==========================================================
-    # STEP 11 : ORDER THE POINTS
-    # Order:
-    # Top Left
-    # Top Right
-    # Bottom Right
-    # Bottom Left
-    # ==========================================================
-
-    rect = np.zeros((4, 2), dtype="float32")
-
-    s = pts.sum(axis=1)
-
-    rect[0] = pts[np.argmin(s)]      # Top Left
-    rect[2] = pts[np.argmax(s)]      # Bottom Right
-
-    diff = np.diff(pts, axis=1)
-
-    rect[1] = pts[np.argmin(diff)]   # Top Right
-    rect[3] = pts[np.argmax(diff)]   # Bottom Left
-
-    # ==========================================================
-    # STEP 12 : CALCULATE DOCUMENT WIDTH
-    # ==========================================================
-
-    (tl, tr, br, bl) = rect
-
-    widthA = np.linalg.norm(br - bl)
-    widthB = np.linalg.norm(tr - tl)
-
-    maxWidth = max(int(widthA), int(widthB))
-
-    # ==========================================================
-    # STEP 13 : CALCULATE DOCUMENT HEIGHT
-    # ==========================================================
-
-    heightA = np.linalg.norm(tr - br)
-    heightB = np.linalg.norm(tl - bl)
-
-    maxHeight = max(int(heightA), int(heightB))
-
-    # ==========================================================
-    # STEP 14 : DEFINE DESTINATION POINTS
-    # ==========================================================
-
-    dst = np.array([
-        [0, 0],
-        [maxWidth - 1, 0],
-        [maxWidth - 1, maxHeight - 1],
-        [0, maxHeight - 1]
-    ], dtype="float32")
-
-    # ==========================================================
-    # STEP 15 : COMPUTE PERSPECTIVE TRANSFORMATION MATRIX
-    # ==========================================================
-
-    matrix = cv2.getPerspectiveTransform(rect, dst)
-
-    # ==========================================================
-    # STEP 16 : APPLY PERSPECTIVE TRANSFORMATION
-    # ==========================================================
-
-    scanned = cv2.warpPerspective(
-        img,
-        matrix,
-        (maxWidth, maxHeight)
+    corners = order_points(
+        document.reshape(4, 2)
     )
 
-    # ==========================================================
-    # STEP 17 : RETURN SCANNED DOCUMENT
-    # ==========================================================
+    corners = corners * ratio
+
+    (tl, tr, br, bl) = corners
+
+    # ======================================================
+    # Step 11 : Compute Width and Height
+    # ======================================================
+
+    width_top = np.linalg.norm(tr - tl)
+    width_bottom = np.linalg.norm(br - bl)
+
+    max_width = int(max(width_top, width_bottom))
+
+    height_left = np.linalg.norm(bl - tl)
+    height_right = np.linalg.norm(br - tr)
+
+    max_height = int(max(height_left, height_right))
+
+    # ======================================================
+    # Step 12 : Define Destination Points
+    # ======================================================
+
+    destination = np.array([
+        [0, 0],
+        [max_width - 1, 0],
+        [max_width - 1, max_height - 1],
+        [0, max_height - 1]
+    ], dtype=np.float32)
+
+    # ======================================================
+    # Step 13 : Compute Perspective Transform Matrix
+    # ======================================================
+
+    matrix = cv2.getPerspectiveTransform(
+        corners.astype(np.float32),
+        destination
+    )
+
+    # ======================================================
+    # Step 14 : Warp the Document
+    # ======================================================
+
+    scanned = cv2.warpPerspective(
+        original,
+        matrix,
+        (max_width, max_height)
+    )
+
+    # ======================================================
+    # Step 15 : Return Final Scanned Document
+    # ======================================================
 
     return scanned
