@@ -14,7 +14,6 @@ from .filters import gaussian_blur
 from .filters import sobel_edge_detection
 
 
-
 def scan_document(img):
     """
     Scan and align a document image.
@@ -27,29 +26,22 @@ def scan_document(img):
     """
 
     # ==========================================================
-    # STEP 1 : READ INPUT IMAGE
+    # STEP 1 : VALIDATE INPUT IMAGE
     # ==========================================================
 
     if img is None:
         raise ValueError("Input image is None.")
 
-
     # ==========================================================
     # STEP 2 : RESIZE IMAGE
     # ==========================================================
 
-    # Resize image for faster processing
-
     height = 700
 
     ratio = img.shape[0] / height
-
     width = int(img.shape[1] / ratio)
 
     img = cv2.resize(img, (width, height))
-
-    # Keep a copy after resizing
-    original = img.copy()
 
     # ==========================================================
     # STEP 3 : APPLY GAUSSIAN BLUR
@@ -77,8 +69,6 @@ def scan_document(img):
     # ==========================================================
     # STEP 6 : MORPHOLOGICAL CLOSING
     # ==========================================================
-
-    # This fills small gaps between broken edges
 
     kernel = np.ones((5, 5), np.uint8)
 
@@ -116,18 +106,12 @@ def scan_document(img):
 
     for cnt in contours:
 
-        # Ignore very small contours
-
         area = cv2.contourArea(cnt)
 
         if area < 10000:
             continue
 
-        # Calculate perimeter
-
         peri = cv2.arcLength(cnt, True)
-
-        # Approximate contour
 
         approx = cv2.approxPolyDP(
             cnt,
@@ -135,32 +119,25 @@ def scan_document(img):
             True
         )
 
-        # Document should have four corners
-
         if len(approx) == 4:
-
             doc = approx
-
             break
 
     # ==========================================================
-    # CHECK IF DOCUMENT IS FOUND
+    # DOCUMENT NOT FOUND
     # ==========================================================
 
     if doc is None:
-        # If document isn't detected, return original image
-        return original
+        return img
 
     # ==========================================================
-    # STEP 10 : EXTRACT THE FOUR CORNER POINTS
+    # STEP 10 : EXTRACT FOUR CORNER POINTS
     # ==========================================================
-
-    # Convert contour into four corner points
 
     pts = doc.reshape(4, 2)
 
     # ==========================================================
-    # STEP 11 : ARRANGE THE CORNER POINTS
+    # STEP 11 : ORDER THE POINTS
     # Order:
     # Top Left
     # Top Right
@@ -170,20 +147,18 @@ def scan_document(img):
 
     rect = np.zeros((4, 2), dtype="float32")
 
-    # Sum of coordinates
     s = pts.sum(axis=1)
 
     rect[0] = pts[np.argmin(s)]      # Top Left
     rect[2] = pts[np.argmax(s)]      # Bottom Right
 
-    # Difference of coordinates
     diff = np.diff(pts, axis=1)
 
     rect[1] = pts[np.argmin(diff)]   # Top Right
     rect[3] = pts[np.argmax(diff)]   # Bottom Left
 
     # ==========================================================
-    # STEP 12 : CALCULATE WIDTH OF DOCUMENT
+    # STEP 12 : CALCULATE DOCUMENT WIDTH
     # ==========================================================
 
     (tl, tr, br, bl) = rect
@@ -194,7 +169,7 @@ def scan_document(img):
     maxWidth = max(int(widthA), int(widthB))
 
     # ==========================================================
-    # STEP 13 : CALCULATE HEIGHT OF DOCUMENT
+    # STEP 13 : CALCULATE DOCUMENT HEIGHT
     # ==========================================================
 
     heightA = np.linalg.norm(tr - br)
@@ -220,7 +195,7 @@ def scan_document(img):
     matrix = cv2.getPerspectiveTransform(rect, dst)
 
     # ==========================================================
-    # STEP 16 : Perspective Transform
+    # STEP 16 : APPLY PERSPECTIVE TRANSFORMATION
     # ==========================================================
 
     scanned = cv2.warpPerspective(
@@ -229,9 +204,8 @@ def scan_document(img):
         (maxWidth, maxHeight)
     )
 
-
     # ==========================================================
-    # STEP 17 : RETURN RESULTS
+    # STEP 17 : RETURN SCANNED DOCUMENT
     # ==========================================================
 
     return scanned
